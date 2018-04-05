@@ -1,6 +1,6 @@
 from SPARQLWrapper import SPARQLWrapper, JSON
 from skosprovider.providers import VocabularyProvider
-from skosprovider.skos import Concept, ConceptScheme, Label, Collection
+from skosprovider.skos import Concept
 
 
 class SparqlProvider(VocabularyProvider):
@@ -35,6 +35,7 @@ class SparqlProvider(VocabularyProvider):
             :class:`skosprovider.skos.Collection` or `False` if the concept or
             collection is unknown to the provider.
         """
+
         pass
 
     def get_by_uri(self, uri):
@@ -73,12 +74,26 @@ class SparqlProvider(VocabularyProvider):
 
         """
         self.sparql.setQuery("""
-                PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-                SELECT *
-                WHERE { ?s a skos:Concept}
+                    PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+                    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                    SELECT ?uri, ?label, ?type 
+                    WHERE {
+                           ?uri skos:prefLabel ?label.
+                           ?uri rdf:type ?type.
+                           FILTER (?type IN (skos:Collection, skos:Concept ) )
+                           FILTER (langmatches(lang(?label), 'nl')) 
+                    } 
                 """)
         self.sparql.setReturnFormat(JSON)
         results = self.sparql.queryAndConvert()
+        bindings = results["results"]["bindings"]
+        r = list()
+        for d in bindings:
+            uri = d["uri"]["value"]
+            m_type = d["type"]["value"][d["type"]["value"].index("#") + 1:].lower()
+            label = d["label"]["value"]
+            r.append(dict(uri=uri, type=m_type, label=label))
+        return r
 
     def get_top_concepts(self, **kwargs):
         """
