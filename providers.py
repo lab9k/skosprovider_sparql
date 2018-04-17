@@ -1,6 +1,6 @@
 from SPARQLWrapper import SPARQLWrapper, JSON
 from skosprovider.providers import VocabularyProvider
-from skosprovider.skos import Concept
+from skosprovider.skos import Concept, Collection
 
 
 class SparqlProvider(VocabularyProvider):
@@ -46,7 +46,30 @@ class SparqlProvider(VocabularyProvider):
             :class:`skosprovider.skos.Collection` or `False` if the concept or
             collection is unknown to the provider.
         """
-        pass
+        q = """
+                    PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+                    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                    SELECT ?uri, ?label, ?type 
+                    WHERE {
+                        ?uri skos:prefLabel ?label.
+                        ?uri rdf:type ?type.
+                        FILTER (?type IN (skos:Collection, skos:Concept ) )
+                        FILTER (langmatches(lang(?label), 'nl'))
+                        FILTER ( ?uri like '%s' )
+                    } 
+        """ % uri
+        self.sparql.setQuery(q)
+        self.sparql.setReturnFormat(JSON)
+        results = self.sparql.queryAndConvert()
+        bindings = results["results"]["bindings"]
+        result = bindings[0]
+        t = result["type"]["value"][result["type"]["value"].index("#") + 1:].lower()
+        ret = False
+        if t == 'collection':
+            ret = Collection(1, uri=result['uri']['value'], labels=[result['label']['value']])
+        elif t == 'concept':
+            ret = Concept(1, uri=result['uri']['value'], labels=[result['label']['value']])
+        return ret
 
     def get_all(self, **kwargs):
         """Returns all concepts and collections in this provider.
